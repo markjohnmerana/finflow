@@ -1,0 +1,149 @@
+name: finflow
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  finflow_network:
+    driver: bridge
+
+# ============================================
+# VOLUMES (persistent storage)
+# ============================================
+volumes:
+  postgres_data:
+  minio_data:
+  airflow_logs:
+  superset_data:
+
+# ============================================
+# SERVICES
+# ============================================
+services:
+
+  # ------------------------------------------
+  # 1. FASTAPI — Mock Banking Data Source
+  # ------------------------------------------
+  fastapi:
+    build:
+      context: ./fastapi
+      dockerfile: Dockerfile
+    container_name: finflow_fastapi
+    ports:
+      - "${FASTAPI_PORT}:8000"
+    networks:
+      - finflow_network
+    environment:
+      - PIPELINE_ENV=${PIPELINE_ENV}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ------------------------------------------
+  # 2. POSTGRESQL — Data Warehouse
+  # ------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: finflow_postgres
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - finflow_network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ------------------------------------------
+  # 3. MINIO — Bronze Data Lake
+  # ------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: finflow_minio
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    networks:
+      - finflow_network
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ------------------------------------------
+  # 4. AIRFLOW — Pipeline Orchestration
+  # ------------------------------------------
+  airflow:
+    image: apache/airflow:2.9.0
+    container_name: finflow_airflow
+    ports:
+      - "${AIRFLOW_PORT}:8080"
+    networks:
+      - finflow_network
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'finflow-secret-key-2024'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      FASTAPI_BASE_URL: http://fastapi:8000
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - ./airflow/entrypoint.sh:/entrypoint.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    restart: unless-stopped
+
+  # ------------------------------------------
+  # 5. SUPERSET — Analytics Dashboard
+  # ------------------------------------------
+  superset:
+    image: apache/superset:latest
+    container_name: finflow_superset
+    ports:
+      - "${SUPERSET_PORT}:8088"
+    networks:
+      - finflow_network
+    environment:
+      SUPERSET_SECRET_KEY: 'finflow-superset-secret-2024'
+      ADMIN_USERNAME: ${SUPERSET_ADMIN_USER}
+      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes:
+      - superset_data:/app/superset_home
+      - ./superset/entrypoint.sh:/entrypoint.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    restart: unless-stopped
