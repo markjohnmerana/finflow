@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+echo "==> Installing PostgreSQL driver into Superset venv..."
+pip install --no-cache-dir \
+  psycopg2-binary==2.9.9
+
 echo "==> Upgrading Superset DB..."
 superset db upgrade
 
@@ -10,7 +14,7 @@ superset fab create-admin \
   --firstname "Admin" \
   --lastname "User" \
   --email "admin@finflow.com" \
-  --password "${ADMIN_PASSWORD}"
+  --password "${ADMIN_PASSWORD}" || true
 
 echo "==> Initializing Superset..."
 superset init
