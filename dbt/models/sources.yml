@@ -1,0 +1,44 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Raw data landed from FastAPI via Airflow"
+    tables:
+      - name: raw_customers
+      - name: raw_accounts
+      - name: raw_transactions
+      
+    tables:
+      - name: raw_customers
+        description: "Raw customer records from Core Banking API"
+        columns:
+          - name: customer_id
+            description: "Unique customer identifier"
+            tests:
+              - not_null
+          - name: risk_level
+            tests:
+              - accepted_values:
+                  values: ['low', 'medium', 'high']
+
+      - name: raw_accounts
+        description: "Raw bank account records"
+        columns:
+          - name: account_id
+            tests:
+              - not_null
+          - name: account_type
+            tests:
+              - accepted_values:
+                  values: ['savings', 'checking', 'credit', 'investment']
+
+      - name: raw_transactions
+        description: "Raw financial transactions with fraud signals"
+        columns:
+          - name: transaction_id
+            tests:
+              - not_null
+          - name: amount
+            tests:
+              - not_null

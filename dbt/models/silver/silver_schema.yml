@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: silver_customers
+    description: "Cleaned and validated customer records"
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: email
+        tests:
+          - not_null
+      - name: risk_level
+        tests:
+          - accepted_values:
+              values: ['low', 'medium', 'high']
+
+  - name: silver_accounts
+    description: "Cleaned and validated bank accounts"
+    columns:
+      - name: account_id
+        tests:
+          - unique
+          - not_null
+      - name: account_type
+        tests:
+          - accepted_values:
+              values: ['savings', 'checking', 'credit', 'investment']
+
+  - name: silver_transactions
+    description: "Cleaned and validated transactions"
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: amount
+        tests:
+          - not_null

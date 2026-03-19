@@ -3,13 +3,17 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
-from helpers import (
-    ingest_entity,
-    load_entity_to_postgres
+
+from ingestion.ingest import ingest_entity
+from ingestion.loader import load_entity_to_postgres
+from config.settings import (
+    CUSTOMER_LIMIT,
+    ACCOUNT_LIMIT,
+    TRANSACTION_LIMIT
 )
 
 # ============================================
-# DAG DEFAULT ARGUMENTS
+# DEFAULT ARGUMENTS
 # ============================================
 default_args = {
     "owner": "finflow",
@@ -28,85 +32,59 @@ with DAG(
     description="FinFlow: API → Bronze Lake → PostgreSQL → dbt",
     default_args=default_args,
     start_date=datetime(2024, 1, 1),
-    schedule_interval="0 6 * * *",  # Run daily at 6AM UTC
+    schedule_interval="0 6 * * *",
     catchup=False,
     tags=["finflow", "finance", "etl"],
 ) as dag:
 
-    # ------------------------------------------
-    # PIPELINE START
-    # ------------------------------------------
     start = EmptyOperator(task_id="start")
 
-    # ------------------------------------------
-    # LAYER 1: INGEST FROM FASTAPI → MINIO
-    # (runs in parallel — fan-out)
-    # ------------------------------------------
+    # ── Ingestion (parallel) ──────────────────────────────────
     ingest_customers = PythonOperator(
         task_id="ingest_customers",
         python_callable=ingest_entity,
-        op_kwargs={"entity": "customers", "limit": 100},
+        op_kwargs={"entity": "customers", "limit": CUSTOMER_LIMIT},
     )
-
     ingest_accounts = PythonOperator(
         task_id="ingest_accounts",
         python_callable=ingest_entity,
-        op_kwargs={"entity": "accounts", "limit": 200},
+        op_kwargs={"entity": "accounts", "limit": ACCOUNT_LIMIT},
     )
-
     ingest_transactions = PythonOperator(
         task_id="ingest_transactions",
         python_callable=ingest_entity,
-        op_kwargs={"entity": "transactions", "limit": 500},
+        op_kwargs={"entity": "transactions", "limit": TRANSACTION_LIMIT},
     )
 
-    # ------------------------------------------
-    # LAYER 2: LOAD BRONZE → POSTGRESQL
-    # (runs after all ingestions complete — fan-in)
-    # ------------------------------------------
+    # ── Bronze Load (parallel) ────────────────────────────────
     load_customers = PythonOperator(
         task_id="load_customers_to_postgres",
         python_callable=load_entity_to_postgres,
         op_kwargs={"entity": "customers"},
     )
-
     load_accounts = PythonOperator(
         task_id="load_accounts_to_postgres",
         python_callable=load_entity_to_postgres,
         op_kwargs={"entity": "accounts"},
     )
-
     load_transactions = PythonOperator(
         task_id="load_transactions_to_postgres",
         python_callable=load_entity_to_postgres,
         op_kwargs={"entity": "transactions"},
     )
 
-    # ------------------------------------------
-    # LAYER 3: DBT TRANSFORMATIONS
-    # (placeholder — we wire these in Layer 5)
-    # ------------------------------------------
+    # ── dbt Placeholders ─────────────────────────────────────
     run_dbt_silver = EmptyOperator(task_id="run_dbt_silver")
     run_dbt_gold   = EmptyOperator(task_id="run_dbt_gold")
 
-    # ------------------------------------------
-    # PIPELINE END
-    # ------------------------------------------
     end = EmptyOperator(task_id="end")
 
-    # ------------------------------------------
-    # TASK DEPENDENCIES — THE PIPELINE FLOW
-    # ------------------------------------------
-    # Start
+    # ── Dependencies ─────────────────────────────────────────
     start >> [ingest_customers, ingest_accounts, ingest_transactions]
 
-    # Fan-in: all ingestions must complete before loading
-    ingest_customers   >> load_customers
-    ingest_accounts    >> load_accounts
+    ingest_customers    >> load_customers
+    ingest_accounts     >> load_accounts
     ingest_transactions >> load_transactions
 
-    # After all loads complete → dbt
     [load_customers, load_accounts, load_transactions] >> run_dbt_silver
-
-    # Silver → Gold → End
     run_dbt_silver >> run_dbt_gold >> end

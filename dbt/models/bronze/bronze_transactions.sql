@@ -1,0 +1,19 @@
+SELECT
+    transaction_id,
+    account_id,
+    transaction_type,
+    amount,
+    currency,
+    merchant_name,
+    merchant_category,
+    transaction_status,
+    timestamp,
+    location_country,
+    is_foreign_transaction,
+    signal_high_value,
+    signal_rapid_succession,
+    signal_foreign_transaction,
+    avg_account_amount,
+    ingested_at,
+    partition_date
+FROM {{ source('bronze', 'raw_transactions') }}

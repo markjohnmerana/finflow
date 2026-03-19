@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: gold_transactions_flagged
+    description: "Transactions with fraud scores and risk classification"
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: risk_classification
+        tests:
+          - accepted_values:
+              values: ['clean', 'suspicious', 'high_risk']
+      - name: fraud_signal_count
+        tests:
+          - not_null
+
+  - name: gold_account_summary
+    description: "Account-level KPIs with fraud metrics"
+    columns:
+      - name: account_id
+        tests:
+          - unique
+          - not_null
+
+  - name: gold_customer_risk
+    description: "Customer risk profiles with aggregated metrics"
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: overall_risk_profile
+        tests:
+          - accepted_values:
+              values: ['low_risk', 'medium_risk', 'high_risk']

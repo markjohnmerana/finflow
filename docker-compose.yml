@@ -147,3 +147,29 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
     restart: unless-stopped
+
+    # ------------------------------------------
+    # 6. DBT CORE — Transformation Layer
+    # ------------------------------------------
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    container_name: finflow_dbt
+    ports:
+      - "8090:8090"         
+    networks:
+      - finflow_network
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./dbt:/dbt
+    working_dir: /dbt
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
