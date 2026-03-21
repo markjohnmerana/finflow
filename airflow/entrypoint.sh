@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+echo "==> Installing additional Python packages..."
+pip install --no-cache-dir \
+  apache-airflow-providers-postgres==5.10.0 \
+  apache-airflow-providers-amazon==8.19.0 \
+  boto3==1.34.0 \
+  requests==2.31.0 \
+  psycopg2-binary==2.9.9
+
 echo "==> Running Airflow DB migration..."
 airflow db migrate
 
