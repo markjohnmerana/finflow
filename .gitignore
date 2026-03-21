@@ -18,7 +18,6 @@ dbt/.user.yml
 # Airflow
 airflow/logs/
 airflow/plugins/
-airflow/dags/config/settings.py
 
 # OS - Windows specific
 Thumbs.db

@@ -89,9 +89,8 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
-
   # ------------------------------------------
-  # 4. AIRFLOW — Pipeline Orchestration
+  # 4. AIRFLOW — Orchestration Layer
   # ------------------------------------------
   airflow:
     image: apache/airflow:2.9.0
@@ -101,20 +100,38 @@ services:
     networks:
       - finflow_network
     environment:
+      # Executor — must be LocalExecutor for parallel tasks
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+      # Metadata DB — both keys for compatibility
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      # Core settings
       AIRFLOW__CORE__FERNET_KEY: ''
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'finflow-secret-key-2024'
+
+      # Admin credentials
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
-      FASTAPI_BASE_URL: http://fastapi:8000
+
+      # FinFlow pipeline config
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
+      FASTAPI_BASE_URL: http://fastapi:8000
+      CUSTOMER_LIMIT: 100
+      ACCOUNT_LIMIT: 200
+      TRANSACTION_LIMIT: 500
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
